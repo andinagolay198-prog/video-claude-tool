@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video × Claude</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --surface3: #22222f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --accent: #7c6aff;
+    --accent2: #a78bfa;
+    --accent-glow: rgba(124,106,255,0.15);
+    --teal: #2dd4bf;
+    --teal-dim: rgba(45,212,191,0.12);
+    --coral: #ff6b6b;
+    --coral-dim: rgba(255,107,107,0.12);
+    --amber: #f59e0b;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --text3: #555570;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 12px;
+    --radius-lg: 18px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 15px; font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo span { color: var(--accent2); }
+
+  .header-status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-family: var(--mono); color: var(--text3);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
+  .dot.online { background: var(--teal); box-shadow: 0 0 6px var(--teal); animation: pulse 2s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ── Layout ── */
+  .app {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    flex: 1;
+    gap: 0;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+    height: calc(100vh - 61px);
+    position: sticky; top: 61px;
+  }
+
+  .sidebar-section {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* ── Drop Zone ── */
+  .drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 32px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .drop-icon {
+    font-size: 32px; margin-bottom: 10px;
+    display: block;
+  }
+  .drop-zone p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+  .drop-zone strong { color: var(--text); font-weight: 500; }
+
+  /* ── Video Preview ── */
+  .video-preview {
+    display: none;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #000;
+    aspect-ratio: 16/9;
+    margin-bottom: 12px;
+  }
+  .video-preview video { width: 100%; height: 100%; object-fit: contain; }
+  .video-meta {
+    display: none;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text2);
+    line-height: 1.8;
+  }
+  .video-meta span { color: var(--accent2); }
+
+  /* ── Settings ── */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .setting-label {
+    font-size: 13px; color: var(--text2);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .setting-label small {
+    font-size: 11px; color: var(--text3); font-family: var(--mono);
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100px; height: 3px;
+    background: var(--surface3);
+    border-radius: 2px; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+  .range-val {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent2); min-width: 30px; text-align: right;
+  }
+
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .toggle {
+    position: relative; width: 36px; height: 20px;
+    cursor: pointer;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--surface3);
+    border-radius: 20px;
+    transition: 0.2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: var(--text3);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+    background: white;
+  }
+
+  /* ── API Key ── */
+  .api-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+    letter-spacing: 0.04em;
+  }
+  .api-input:focus { border-color: var(--accent); }
+  .api-input::placeholder { color: var(--text3); }
+
+  /* ── Workflow Steps ── */
+  .workflow {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 8px;
+  }
+  .wf-step {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--text3);
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+    font-family: var(--mono);
+  }
+  .wf-step.active { color: var(--text); border-color: var(--accent); background: var(--accent-glow); }
+  .wf-step.done { color: var(--teal); border-color: var(--teal-dim); background: var(--teal-dim); }
+  .wf-step.error { color: var(--coral); border-color: var(--coral-dim); background: var(--coral-dim); }
+  .wf-icon { font-size: 14px; min-width: 18px; text-align: center; }
+  .wf-spinner {
+    width: 12px; height: 12px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-left: auto; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Main Panel ── */
+  .main {
+    display: flex; flex-direction: column;
+    height: calc(100vh - 61px);
+    overflow: hidden;
+  }
+
+  /* ── Question Bar ── */
+  .question-bar {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: flex-end;
+  }
+  .question-wrap {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    transition: border-color 0.2s;
+  }
+  .question-wrap:focus-within { border-color: var(--accent); }
+  .question-wrap textarea {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: var(--sans); font-size: 14px; color: var(--text);
+    resize: none; line-height: 1.5; max-height: 120px;
+  }
+  .question-wrap textarea::placeholder { color: var(--text3); }
+
+  .btn-analyze {
+    padding: 12px 22px;
+    background: linear-gradient(135deg, var(--accent), #9c63ff);
+    border: none; border-radius: var(--radius);
+    color: white; font-family: var(--sans); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .btn-analyze:hover { opacity: 0.9; }
+  .btn-analyze:active { transform: scale(0.97); }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Chat Area ── */
+  .chat-area {
+    flex: 1; overflow-y: auto;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 18px;
+    scroll-behavior: smooth;
+  }
+
+  /* ── Messages ── */
+  .message {
+    display: flex; gap: 12px;
+    animation: fadeUp 0.3s ease;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .msg-avatar {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; font-family: var(--mono);
+  }
+  .msg-avatar.user { background: var(--surface3); color: var(--text2); }
+  .msg-avatar.claude {
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    color: white; font-size: 11px;
+  }
+
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-meta {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .msg-name { font-size: 12px; font-weight: 500; font-family: var(--mono); }
+  .msg-name.claude { color: var(--accent2); }
+  .msg-name.user { color: var(--text2); }
+  .msg-time { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+
+  .msg-content {
+    font-size: 14px; line-height: 1.75; color: var(--text);
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  /* Info box */
+  .info-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex; gap: 16px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text2); margin-bottom: 10px;
+  }
+  .info-item { display: flex; flex-direction: column; gap: 3px; }
+  .info-item strong { color: var(--text); font-size: 13px; }
+
+  /* Frame strip */
+  .frame-strip {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding-bottom: 6px; margin-bottom: 10px;
+    scrollbar-width: thin; scrollbar-color: var(--surface3) transparent;
+  }
+  .frame-thumb {
+    width: 80px; height: 52px; flex-shrink: 0;
+    border-radius: 6px; background: var(--surface3);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .frame-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; padding: 40px; text-align: center;
+  }
+  .empty-icon {
+    font-size: 48px; opacity: 0.4;
+  }
+  .empty-state h3 { font-size: 17px; font-weight: 500; color: var(--text2); }
+  .empty-state p { font-size: 13px; color: var(--text3); max-width: 320px; line-height: 1.6; }
+
+  /* Workflow pipeline visual */
+  .pipeline {
+    display: flex; align-items: center; gap: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .pipe-step {
+    flex: 1; padding: 10px 8px; text-align: center;
+    font-size: 11px; font-family: var(--mono);
+    color: var(--text3); border-right: 1px solid var(--border);
+    position: relative; transition: all 0.3s;
+  }
+  .pipe-step:last-child { border-right: none; }
+  .pipe-step.active { color: var(--accent2); background: var(--accent-glow); }
+  .pipe-step.done { color: var(--teal); background: var(--teal-dim); }
+  .pipe-icon { font-size: 16px; display: block; margin-bottom: 4px; }
+  .pipe-arrow {
+    position: absolute; right: -7px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px; color: var(--border2);
+    z-index: 1;
+  }
+
+  /* Follow-up input */
+  .followup-bar {
+    padding: 12px 24px 16px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 8px;
+  }
+  .followup-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-family: var(--sans); font-size: 13px;
+    color: var(--text); outline: none;
+    transition: border-color 0.2s;
+  }
+  .followup-input:focus { border-color: var(--accent); }
+  .followup-input::placeholder { color: var(--text3); }
+  .btn-send {
+    padding: 10px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text2); cursor: pointer;
+    font-size: 14px; transition: all 0.2s;
+  }
+  .btn-send:hover { border-color: var(--accent); color: var(--accent2); }
+  .btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { height: auto; position: relative; }
+    .main { height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">▶</div>
+    Video × <span>Claude</span>
+  </div>
+  <div class="header-status">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Đang kiểm tra...</span>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <!-- Upload -->
+    <div class="sidebar-section">
+      <div class="section-label">01 / Upload video</div>
+
+      <div class="video-preview" id="video-preview">
+        <video id="video-el" controls></video>
+      </div>
+      <div class="video-meta" id="video-meta"></div>
+
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept="video/*">
+        <span class="drop-icon">🎬</span>
+        <p><strong>Kéo thả video vào đây</strong><br>hoặc click để chọn file<br>
+        <small style="color: var(--text3)">MP4 · MOV · AVI · MKV · WebM</small></p>
+      </div>
+    </div>
+
+    <!-- Workflow status -->
+    <div class="sidebar-section">
+      <div class="section-label">02 / Workflow</div>
+
+      <div class="pipeline">
+        <div class="pipe-step" id="pipe-upload">
+          <span class="pipe-icon">📁</span>Video
+        </div>
+        <div class="pipe-step" id="pipe-ffmpeg">
+          <span class="pipe-icon">🎞</span>Frames
+        </div>
+        <div class="pipe-step" id="pipe-whisper">
+          <span class="pipe-icon">🎙</span>Audio
+        </div>
+        <div class="pipe-step" id="pipe-claude">
+          <span class="pipe-icon">✦</span>Claude
+        </div>
+      </div>
+
+      <div class="workflow">
+        <div class="wf-step" id="wf-upload">
+          <span class="wf-icon">📁</span> Upload video
+        </div>
+        <div class="wf-step" id="wf-ffmpeg">
+          <span class="wf-icon">🎞</span> Trích xuất frames (ffmpeg)
+        </div>
+        <div class="wf-step" id="wf-whisper">
+          <span class="wf-icon">🎙</span> Transcribe âm thanh (Whisper)
+        </div>
+        <div class="wf-step" id="wf-claude">
+          <span class="wf-icon">✦</span> Gửi tới Claude API
+        </div>
+        <div class="wf-step" id="wf-result">
+          <span class="wf-icon">💬</span> Nhận kết quả
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="sidebar-section">
+      <div class="section-label">03 / Cài đặt</div>
+
+      <div class="setting-row">
+        <div class="setting-label">
+          Frame rate
+          <small>frames/giây</small>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="fps-range" min="0.1" max="2" step="0.1" value="0.5">
+          <span class="range-val" id="fps-val">0.5</span>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label">
+          Max frames
+          <small>tối đa frames gửi AI</small>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="maxf-range" min="4" max="32" step="2" value="16">
+          <span class="range-val" id="maxf-val">16</span>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="setting-label">
+          Transcribe âm thanh
+          <small>dùng Whisper</small>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-whisper" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- API Key -->
+    <div class="sidebar-section">
+      <div class="section-label">04 / API Key</div>
+      <input type="password" class="api-input" id="api-key"
+        placeholder="sk-ant-api03-..." autocomplete="off">
+      <p style="font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono)">
+        Key chỉ dùng trên trình duyệt, không lưu server
+      </p>
+    </div>
+
+  </aside>
+
+  <!-- ── MAIN PANEL ── -->
+  <main class="main">
+
+    <!-- Question -->
+    <div class="question-bar">
+      <div class="question-wrap">
+        <textarea id="question" rows="2"
+          placeholder="Hỏi về video... (VD: Mô tả nội dung, Có bao nhiêu người?, Phân tích hành động...)"></textarea>
+      </div>
+      <button class="btn-analyze" id="btn-analyze" disabled>
+        <span id="btn-icon">✦</span>
+        <span id="btn-label">Phân tích</span>
+      </button>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area" id="chat-area">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🎬</div>
+        <h3>Video × Claude</h3>
+        <p>Upload một video, đặt câu hỏi, và Claude sẽ phân tích nội dung thông qua frames và âm thanh được trích xuất tự động.</p>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;justify-content:center">
+          <span style="background:var(--surface2);border:1px solid var(--border);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--text2);font-family:var(--mono)">ffmpeg → frames</span>
+          <span style="background:var(--surface2);border:1px solid var(--border);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--text2);font-family:var(--mono)">Whisper → text</span>
+          <span style="background:var(--surface2);border:1px solid var(--border);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--text2);font-family:var(--mono)">Claude → analysis</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Follow-up -->
+    <div class="followup-bar" id="followup-bar" style="display:none">
+      <input type="text" class="followup-input" id="followup-input"
+        placeholder="Hỏi thêm về video này...">
+      <button class="btn-send" id="btn-followup">↑</button>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Auto-detect: nếu chạy qua Docker/nginx dùng /api, nếu local dùng localhost:8000
+const BACKEND = window.location.port === '8080' || window.location.port === '80' || window.location.port === ''
+  ? '/api'
+  : 'http://localhost:8000';
+
+// State
+let videoFile = null;
+let lastAnalysis = '';
+let isAnalyzing = false;
+
+// DOM refs
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const videoPreview = document.getElementById('video-preview');
+const videoEl = document.getElementById('video-el');
+const videoMeta = document.getElementById('video-meta');
+const chatArea = document.getElementById('chat-area');
+const emptyState = document.getElementById('empty-state');
+const btnAnalyze = document.getElementById('btn-analyze');
+const btnLabel = document.getElementById('btn-label');
+const btnIcon = document.getElementById('btn-icon');
+const questionEl = document.getElementById('question');
+const followupBar = document.getElementById('followup-bar');
+const followupInput = document.getElementById('followup-input');
+const btnFollowup = document.getElementById('btn-followup');
+
+// Range sliders
+document.getElementById('fps-range').oninput = e => {
+  document.getElementById('fps-val').textContent = parseFloat(e.target.value).toFixed(1);
+};
+document.getElementById('maxf-range').oninput = e => {
+  document.getElementById('maxf-val').textContent = e.target.value;
+};
+
+// Health check
+async function checkHealth() {
+  try {
+    const r = await fetch(`${BACKEND}/health`);
+    const data = await r.json();
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    if (data.status === 'ok') {
+      dot.className = 'dot online';
+      const missing = Object.entries(data.dependencies).filter(([k,v])=>!v).map(([k])=>k);
+      if (missing.length > 0) {
+        txt.textContent = `Backend OK · thiếu: ${missing.join(', ')}`;
+      } else {
+        txt.textContent = 'Backend sẵn sàng';
+      }
+    }
+  } catch {
+    document.getElementById('status-dot').className = 'dot';
+    document.getElementById('status-text').textContent = 'Backend offline — chạy start.sh';
+  }
+}
+checkHealth();
+
+// File handling
+dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('drag-over'); };
+dropZone.ondragleave = () => dropZone.classList.remove('drag-over');
+dropZone.ondrop = e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('video/')) loadVideo(f);
+};
+fileInput.onchange = e => {
+  if (e.target.files[0]) loadVideo(e.target.files[0]);
+};
+
+function loadVideo(file) {
+  videoFile = file;
+  const url = URL.createObjectURL(file);
+  videoEl.src = url;
+  videoPreview.style.display = 'block';
+  videoMeta.style.display = 'block';
+
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  videoEl.onloadedmetadata = () => {
+    const d = videoEl.duration;
+    const mins = Math.floor(d / 60);
+    const secs = Math.floor(d % 60);
+    videoMeta.innerHTML = `
+      <b style="color:var(--text)">${file.name}</b><br>
+      Thời lượng: <span>${mins}:${secs.toString().padStart(2,'0')}</span> &nbsp;·&nbsp;
+      Kích thước: <span>${sizeMB} MB</span> &nbsp;·&nbsp;
+      Loại: <span>${file.type.split('/')[1]}</span>
+    `;
+  };
+  btnAnalyze.disabled = false;
+  setWorkflowStep('upload', 'done');
+}
+
+// Workflow helpers
+function setWorkflowStep(step, state) {
+  const el = document.getElementById(`wf-${step}`);
+  const pipe = document.getElementById(`pipe-${step}`);
+  if (!el) return;
+  el.className = `wf-step ${state}`;
+
+  const spinner = el.querySelector('.wf-spinner');
+  if (spinner) spinner.remove();
+
+  if (state === 'active') {
+    const s = document.createElement('div');
+    s.className = 'wf-spinner';
+    el.appendChild(s);
+  }
+  if (pipe) pipe.className = `pipe-step ${state}`;
+}
+
+function resetWorkflow() {
+  ['upload','ffmpeg','whisper','claude','result'].forEach(s => {
+    setWorkflowStep(s, '');
+  });
+  if (videoFile) setWorkflowStep('upload', 'done');
+}
+
+// Add message to chat
+function addMessage(role, content, meta) {
+  if (emptyState) emptyState.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'message';
+
+  const avatar = document.createElement('div');
+  avatar.className = `msg-avatar ${role}`;
+  avatar.textContent = role === 'claude' ? 'AI' : 'U';
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  const now = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'});
+  body.innerHTML = `
+    <div class="msg-meta">
+      <span class="msg-name ${role}">${role === 'claude' ? 'Claude' : 'Bạn'}</span>
+      <span class="msg-time">${now}</span>
+    </div>
+  `;
+
+  if (meta) {
+    const infoBox = document.createElement('div');
+    infoBox.className = 'info-box';
+    if (meta.frames) {
+      infoBox.innerHTML += `<div class="info-item"><small>Frames phân tích</small><strong>${meta.frames}</strong></div>`;
+    }
+    if (meta.video_info) {
+      const vi = meta.video_info;
+      if (vi.duration) infoBox.innerHTML += `<div class="info-item"><small>Thời lượng</small><strong>${vi.duration}s</strong></div>`;
+      if (vi.width) infoBox.innerHTML += `<div class="info-item"><small>Độ phân giải</small><strong>${vi.width}×${vi.height}</strong></div>`;
+      if (vi.fps) infoBox.innerHTML += `<div class="info-item"><small>FPS</small><strong>${vi.fps}</strong></div>`;
+    }
+    if (meta.transcript_available) {
+      infoBox.innerHTML += `<div class="info-item"><small>Transcript</small><strong style="color:var(--teal)">✓ Có</strong></div>`;
+    }
+    body.appendChild(infoBox);
+  }
+
+  const msgContent = document.createElement('div');
+  msgContent.className = 'msg-content';
+  msgContent.textContent = content;
+  body.appendChild(msgContent);
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(body);
+  chatArea.appendChild(wrap);
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  return msgContent;
+}
+
+// Main analyze
+btnAnalyze.onclick = analyze;
+questionEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) analyze();
+});
+
+async function analyze() {
+  if (!videoFile || isAnalyzing) return;
+  const question = questionEl.value.trim() || 'Hãy mô tả chi tiết nội dung video này';
+  const apiKey = document.getElementById('api-key').value.trim();
+
+  isAnalyzing = true;
+  btnAnalyze.disabled = true;
+  btnLabel.textContent = 'Đang phân tích...';
+  resetWorkflow();
+
+  // Add user message
+  addMessage('user', question);
+
+  // Build form data
+  const fd = new FormData();
+  fd.append('file', videoFile);
+  fd.append('question', question);
+  fd.append('fps', document.getElementById('fps-range').value);
+  fd.append('max_frames', document.getElementById('maxf-range').value);
+  fd.append('use_transcript', document.getElementById('use-whisper').checked ? 'true' : 'false');
+  fd.append('api_key', apiKey);
+
+  // Workflow steps
+  setWorkflowStep('ffmpeg', 'active');
+  setWorkflowStep('whisper', 'active');
+
+  try {
+    const resp = await fetch(`${BACKEND}/analyze`, { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let claudeEl = null;
+    let fullText = '';
+    let infoMeta = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const lines = decoder.decode(value).split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const ev = JSON.parse(line);
+
+          if (ev.type === 'info') {
+            infoMeta = ev;
+            setWorkflowStep('ffmpeg', 'done');
+            setWorkflowStep('whisper', ev.transcript_available ? 'done' : 'done');
+            setWorkflowStep('claude', 'active');
+          }
+
+          if (ev.type === 'text') {
+            if (!claudeEl) {
+              claudeEl = addMessage('claude', '', infoMeta);
+            }
+            fullText += ev.text;
+            claudeEl.textContent = fullText;
+            chatArea.scrollTop = chatArea.scrollHeight;
+          }
+
+          if (ev.type === 'done') {
+            setWorkflowStep('claude', 'done');
+            setWorkflowStep('result', 'done');
+            lastAnalysis = fullText;
+            followupBar.style.display = 'flex';
+          }
+
+          if (ev.type === 'error') {
+            throw new Error(ev.message);
+          }
+
+        } catch (parseErr) { /* skip bad JSON */ }
+      }
+    }
+
+  } catch (err) {
+    setWorkflowStep('claude', 'error');
+    addMessage('claude', `❌ Lỗi: ${err.message}\n\nHãy kiểm tra:\n• Backend đang chạy (start.sh)\n• API key hợp lệ\n• ffmpeg đã cài đặt`);
+  }
+
+  isAnalyzing = false;
+  btnAnalyze.disabled = false;
+  btnLabel.textContent = 'Phân tích';
+}
+
+// Follow-up chat
+async function sendFollowup() {
+  const q = followupInput.value.trim();
+  if (!q || isAnalyzing) return;
+  followupInput.value = '';
+
+  const apiKey = document.getElementById('api-key').value.trim();
+  addMessage('user', q);
+
+  isAnalyzing = true;
+  btnFollowup.disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('question', q);
+    fd.append('context', lastAnalysis.slice(0, 2000));
+    fd.append('api_key', apiKey);
+
+    const resp = await fetch(`${BACKEND}/chat`, { method: 'POST', body: fd });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let el = null; let text = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = decoder.decode(value).split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const ev = JSON.parse(line);
+          if (ev.type === 'text') {
+            if (!el) el = addMessage('claude', '');
+            text += ev.text;
+            el.textContent = text;
+            chatArea.scrollTop = chatArea.scrollHeight;
+          }
+          if (ev.type === 'done') lastAnalysis = text;
+        } catch {}
+      }
+    }
+  } catch (err) {
+    addMessage('claude', `❌ ${err.message}`);
+  }
+
+  isAnalyzing = false;
+  btnFollowup.disabled = false;
+}
+
+btnFollowup.onclick = sendFollowup;
+followupInput.onkeydown = e => { if (e.key === 'Enter') sendFollowup(); };
+
+// Quick question suggestions
+const suggestions = [
+  'Mô tả nội dung chính của video',
+  'Có bao nhiêu người trong video?',
+  'Phân tích các hành động trong video',
+  'Video quay ở đâu và vào lúc nào?',
+  'Tóm tắt ngắn gọn nội dung video',
+];
+
+// Add suggestion pills to empty state
+const pillWrap = document.createElement('div');
+pillWrap.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:16px;max-width:400px';
+suggestions.forEach(s => {
+  const pill = document.createElement('button');
+  pill.textContent = s;
+  pill.style.cssText = `background:var(--surface2);border:1px solid var(--border);
+    padding:6px 12px;border-radius:20px;font-size:12px;color:var(--text2);
+    cursor:pointer;font-family:var(--sans);transition:all 0.2s`;
+  pill.onmouseover = () => { pill.style.borderColor = 'var(--accent)'; pill.style.color = 'var(--accent2)'; };
+  pill.onmouseout = () => { pill.style.borderColor = 'var(--border)'; pill.style.color = 'var(--text2)'; };
+  pill.onclick = () => { questionEl.value = s; };
+  pillWrap.appendChild(pill);
+});
+document.getElementById('empty-state').appendChild(pillWrap);
+</script>
+</body>
+</html>
