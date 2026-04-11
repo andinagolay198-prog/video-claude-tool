@@ -861,6 +861,7 @@ async function analyze() {
             setWorkflowStep('result', 'done');
             lastAnalysis = fullText;
             followupBar.style.display = 'flex';
+            showActionButtons(claudeEl, fullText);
           }
 
           if (ev.type === 'error') {
@@ -956,6 +957,65 @@ suggestions.forEach(s => {
   pillWrap.appendChild(pill);
 });
 document.getElementById('empty-state').appendChild(pillWrap);
+
+function textToSRT(text) {
+  // Chỉ lấy lời thoại: dòng có dấu ngoặc kép hoặc bắt đầu bằng - "
+  const lines = text.split(/\n+/)
+    .map(l => l.trim())
+    .filter(l => l)
+    .map(l => {
+      // Trích xuất nội dung trong dấu ngoặc kép
+      const quoted = l.match(/[""]([^""]+)[""]/g);
+      if (quoted) return quoted.map(q => q.replace(/^[""]|[""]$/g,'')).join(' ');
+      // Dòng bắt đầu bằng - hoặc * có nội dung thoại
+      if (/^[-*]\s+.{10,}/.test(l) && !l.includes('**')) return l.replace(/^[-*]\s+/,'');
+      return null;
+    })
+    .filter(l => l && l.length > 3);
+
+  let srt = '';
+  lines.forEach((line, i) => {
+    const start = i * 5;
+    const end = start + 4;
+    const fmt = s => String(Math.floor(s/3600)).padStart(2,'0') + ':' +
+      String(Math.floor(s%3600/60)).padStart(2,'0') + ':' +
+      String(s%60).padStart(2,'0') + ',000';
+    srt += `${i+1}\n${fmt(start)} --> ${fmt(end)}\n${line}\n\n`;
+  });
+  return srt || '1\n00:00:00,000 --> 00:00:05,000\n[Không tìm thấy lời thoại]\n\n';
+}
+
+function showActionButtons(el, text) {
+  if (!el) return;
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;margin-top:12px;';
+  
+  const btnCopy = document.createElement('button');
+  btnCopy.textContent = '📋 Copy';
+  btnCopy.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;font-size:13px;';
+  btnCopy.onclick = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      btnCopy.textContent = '✅ Đã copy';
+      setTimeout(() => btnCopy.textContent = '📋 Copy', 2000);
+    });
+  };
+  
+  const btnSRT = document.createElement('button');
+  btnSRT.textContent = '💾 Lưu SRT';
+  btnSRT.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;font-size:13px;';
+  btnSRT.onclick = () => {
+    const srt = textToSRT(text);
+    const blob = new Blob([srt], {type:'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (videoFile ? videoFile.name.replace(/\.[^.]+$/,''): 'subtitle') + '.srt';
+    a.click();
+  };
+  
+  bar.appendChild(btnCopy);
+  bar.appendChild(btnSRT);
+  el.parentElement.appendChild(bar);
+}
 </script>
 </body>
 </html>
