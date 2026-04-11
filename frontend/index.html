@@ -619,10 +619,7 @@
 
 <script>
 // Auto-detect: nếu chạy qua Docker/nginx dùng /api, nếu local dùng localhost:8000
-const BACKEND = window.location.port === '8080' || window.location.port === '80' || window.location.port === ''
-  ? '/api'
-  : 'http://localhost:8000';
-
+const BACKEND = 'http://192.168.100.2:8765';
 // State
 let videoFile = null;
 let lastAnalysis = '';

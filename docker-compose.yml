@@ -1,10 +1,9 @@
-version: "3.9"
-
 services:
   video-claude-backend:
     build: .
     container_name: video-claude-backend
     restart: unless-stopped
+    privileged: true
     ports:
       - "8765:8000"
     environment:
@@ -22,13 +21,15 @@ services:
     image: nginx:alpine
     container_name: video-claude-frontend
     restart: unless-stopped
+    privileged: true
     ports:
       - "8766:80"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - video-claude-backend
+      video-claude-backend:
+        condition: service_healthy
 
 volumes:
   whisper-cache:
