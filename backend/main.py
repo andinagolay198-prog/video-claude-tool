@@ -260,3 +260,164 @@ async def chat_followup(
         yield json.dumps({"type": "done"}) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
+
+@app.post("/sync-srt")
+async def sync_srt(
+    file: UploadFile = File(...),
+    srt_content: str = Form(...),
+    language: str = Form("auto")
+):
+    """Sync SRT timestamps với audio thật dùng Whisper word-level timestamps"""
+    suffix = Path(file.filename).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Extract audio
+            audio_path = os.path.join(tmpdir, "audio.wav")
+            subprocess.run([
+                "ffmpeg", "-i", tmp_path,
+                "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+                audio_path, "-y", "-loglevel", "error"
+            ], check=True, capture_output=True)
+
+            # Whisper với word timestamps
+            lang_arg = [] if language == "auto" else ["--language", language]
+            result = subprocess.run([
+                "whisper", audio_path,
+                "--model", "tiny",
+                "--word_timestamps", "True",
+                "--output_format", "srt",
+                "--output_dir", tmpdir
+            ] + lang_arg, capture_output=True, text=True, timeout=600)
+
+            srt_files = list(Path(tmpdir).glob("*.srt"))
+            if srt_files:
+                whisper_srt = srt_files[0].read_text().strip()
+                return {"status": "ok", "srt": whisper_srt}
+            else:
+                return {"status": "error", "message": "Whisper không tạo được SRT", "srt": srt_content}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e), "srt": srt_content}
+    finally:
+        os.unlink(tmp_path)
+
+@app.post("/split-video")
+async def split_video(
+    file: UploadFile = File(...),
+    segment_minutes: float = Form(10.0),
+    silence_threshold: str = Form("-35dB"),
+    silence_duration: float = Form(0.3)
+):
+    suffix = Path(file.filename).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir="/tmp") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        probe = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "csv=p=0", tmp_path
+        ], capture_output=True, text=True)
+        total_duration = float(probe.stdout.strip())
+
+        silence_result = subprocess.run([
+            "ffmpeg", "-i", tmp_path,
+            "-af", f"silencedetect=noise={silence_threshold}:d={silence_duration}",
+            "-f", "null", "-"
+        ], capture_output=True, text=True, timeout=120)
+
+        silence_ends = []
+        for line in silence_result.stderr.split('\n'):
+            if 'silence_end' in line:
+                try:
+                    t = float(line.split('silence_end:')[1].split()[0])
+                    silence_ends.append(t)
+                except:
+                    pass
+
+        segment_secs = segment_minutes * 60
+        cut_points = [0.0]
+        current = segment_secs
+
+        while current < total_duration:
+            best = min(silence_ends, key=lambda s: abs(s - current), default=None)
+            if best and abs(best - current) < 30:
+                cut_points.append(round(best, 2))
+            else:
+                cut_points.append(round(current, 2))
+            current += segment_secs
+
+        cut_points.append(round(total_duration, 2))
+
+        segments = []
+        for i in range(len(cut_points) - 1):
+            start = cut_points[i]
+            end = cut_points[i+1]
+            def fmt(s):
+                return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{s%60:06.3f}"
+            segments.append({
+                "index": i + 1,
+                "start": start,
+                "end": end,
+                "duration": round(end - start, 2),
+                "start_fmt": fmt(start),
+                "end_fmt": fmt(end)
+            })
+
+        return {
+            "status": "ok",
+            "total_duration": round(total_duration, 2),
+            "total_segments": len(segments),
+            "silence_points": len(silence_ends),
+            "segments": segments,
+            "filename": file.filename
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        os.unlink(tmp_path)
+
+@app.post("/cut-segment")
+async def cut_segment(
+    file: UploadFile = File(...),
+    start: float = Form(...),
+    end: float = Form(...),
+    index: int = Form(...)
+):
+    suffix = Path(file.filename).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir="/tmp") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    out_path = tmp_path + f"_part{index}{suffix}"
+    try:
+        subprocess.run([
+            "ffmpeg", "-i", tmp_path,
+            "-ss", str(start), "-to", str(end),
+            "-c", "copy",
+            out_path, "-y", "-loglevel", "error"
+        ], check=True, capture_output=True, timeout=300)
+
+        with open(out_path, "rb") as f:
+            data = f.read()
+
+        from fastapi.responses import Response
+        return Response(
+            content=data,
+            media_type="video/mp4",
+            headers={"Content-Disposition": f"attachment; filename=part{index}{suffix}"}
+        )
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        os.unlink(tmp_path)
+        if os.path.exists(out_path):
+            os.unlink(out_path)

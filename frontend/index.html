@@ -453,6 +453,16 @@
     .sidebar { height: auto; position: relative; }
     .main { height: auto; }
   }
+
+  .split-panel { margin-top:12px; padding:12px; background:var(--bg2); border-radius:8px; border:1px solid var(--border); }
+  .split-panel h4 { margin:0 0 8px; font-size:13px; color:var(--text2); }
+  .segment-list { display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; }
+  .segment-item { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--bg3,#1a1a2e); border-radius:6px; font-size:12px; }
+  .segment-item span { color:var(--text2); }
+  .segment-item strong { color:var(--text1); }
+  .btn-split { padding:6px 14px; border-radius:6px; border:1px solid var(--accent); background:transparent; color:var(--accent); cursor:pointer; font-size:13px; margin-top:8px; width:100%; }
+  .btn-split:hover { background:var(--accent); color:#fff; }
+  .btn-split:disabled { opacity:0.4; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -705,6 +715,14 @@ function loadVideo(file) {
     `;
   };
   btnAnalyze.disabled = false;
+
+  // Gợi ý cắt nếu video lớn
+  if (videoFile.size > 50 * 1024 * 1024) {
+    showSplitSuggestion();
+  } else {
+    const sp = document.getElementById('split-panel');
+    if (sp) sp.remove();
+  }
   setWorkflowStep('upload', 'done');
 }
 
@@ -1012,9 +1030,123 @@ function showActionButtons(el, text) {
     a.click();
   };
   
+  const btnSync = document.createElement('button');
+  btnSync.textContent = '🔄 Sync Timestamp';
+  btnSync.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;font-size:13px;';
+  btnSync.onclick = async () => {
+    if (!videoFile) { alert('Cần có video để sync!'); return; }
+    btnSync.textContent = '⏳ Đang sync...';
+    btnSync.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append('file', videoFile);
+      fd.append('srt_content', textToSRT(text));
+      fd.append('language', 'auto');
+      const resp = await fetch('http://192.168.100.2:8765/sync-srt', {method:'POST', body:fd});
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        // Download SRT đã sync
+        const blob = new Blob([data.srt], {type:'text/plain;charset=utf-8'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (videoFile ? videoFile.name.replace(/\.[^.]+$/,'') : 'subtitle') + '_synced.srt';
+        a.click();
+        btnSync.textContent = '✅ Đã sync & lưu!';
+        setTimeout(() => { btnSync.textContent = '🔄 Sync Timestamp'; btnSync.disabled = false; }, 3000);
+      } else {
+        alert('Lỗi sync: ' + data.message);
+        btnSync.textContent = '🔄 Sync Timestamp';
+        btnSync.disabled = false;
+      }
+    } catch(e) {
+      alert('Lỗi: ' + e.message);
+      btnSync.textContent = '🔄 Sync Timestamp';
+      btnSync.disabled = false;
+    }
+  };
+
   bar.appendChild(btnCopy);
   bar.appendChild(btnSRT);
+  bar.appendChild(btnSync);
   el.parentElement.appendChild(bar);
+}
+async function showSplitSuggestion() {
+  // Xóa panel cũ
+  const old = document.getElementById('split-panel');
+  if (old) old.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'split-panel';
+  panel.className = 'split-panel';
+  panel.innerHTML = '<h4>⚠️ Video lớn (' + (videoFile.size/1024/1024).toFixed(1) + 'MB) — Đang phân tích điểm cắt...</h4>';
+
+  // Chèn sau phần upload info
+  const uploadSection = document.querySelector('.upload-section, #file-info, .file-meta');
+  const dropzone = document.querySelector('.dropzone, #drop-zone');
+  if (dropzone && dropzone.parentElement) {
+    dropzone.parentElement.insertBefore(panel, dropzone.nextSibling);
+  }
+
+  try {
+    const fd = new FormData();
+    fd.append('file', videoFile);
+    fd.append('segment_minutes', '10');
+    const resp = await fetch('http://192.168.100.2:8765/split-video', {method:'POST', body:fd});
+    const data = await resp.json();
+
+    if (data.status === 'ok') {
+      const totalMin = Math.floor(data.total_duration / 60);
+      let html = `<h4>✂️ Gợi ý cắt: ${data.total_segments} phần (~10 phút/phần) — Tổng: ${totalMin} phút</h4>`;
+      html += '<div class="segment-list">';
+      data.segments.forEach(s => {
+        html += `<div class="segment-item">
+          <strong>Phần ${s.index}</strong>
+          <span>${s.start_fmt} → ${s.end_fmt}</span>
+          <span>${Math.floor(s.duration/60)}p${Math.floor(s.duration%60)}s</span>
+        </div>`;
+      });
+      html += '</div>';
+      html += `<div style="font-size:11px;color:var(--text3);margin-top:6px;">💡 Điểm cắt tại khoảng im lặng — ${data.silence_points} điểm im lặng phát hiện</div>`;
+      html += '<button class="btn-split" onclick="downloadSegments()">✂️ Cắt & Tải xuống từng phần</button>';
+      panel.innerHTML = html;
+      window._splitSegments = data.segments;
+      window._splitFilename = data.filename;
+    } else {
+      panel.innerHTML = '<h4>⚠️ ' + data.message + '</h4>';
+    }
+  } catch(e) {
+    panel.innerHTML = '<h4>⚠️ Lỗi phân tích: ' + e.message + '</h4>';
+  }
+}
+
+async function downloadSegments() {
+  if (!window._splitSegments || !videoFile) return;
+  const btn = document.querySelector('.btn-split');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang xử lý...';
+
+  for (const seg of window._splitSegments) {
+    btn.textContent = `⏳ Đang cắt phần ${seg.index}/${window._splitSegments.length}...`;
+    try {
+      const fd = new FormData();
+      fd.append('file', videoFile);
+      fd.append('start', seg.start);
+      fd.append('end', seg.end);
+      fd.append('index', seg.index);
+      const resp = await fetch('http://192.168.100.2:8765/cut-segment', {method:'POST', body:fd});
+      const blob = await resp.blob();
+      const ext = videoFile.name.split('.').pop();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = videoFile.name.replace(/\.[^.]+$/, '') + `_part${seg.index}.${ext}`;
+      a.click();
+      await new Promise(r => setTimeout(r, 1000));
+    } catch(e) {
+      console.error('Lỗi cắt phần ' + seg.index, e);
+    }
+  }
+  btn.textContent = '✅ Xong!';
+  btn.disabled = false;
 }
 </script>
 </body>
