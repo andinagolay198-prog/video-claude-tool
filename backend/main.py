@@ -421,3 +421,220 @@ async def cut_segment(
         os.unlink(tmp_path)
         if os.path.exists(out_path):
             os.unlink(out_path)
+
+# ============ DOWNLOAD VIDEO ============
+@app.post("/download-video")
+async def download_video(
+    url: str = Form(...),
+    quality: str = Form("best")
+):
+    """Download video từ YouTube/TikTok via yt-dlp"""
+    try:
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+            cmd = [
+                "yt-dlp",
+                "--no-playlist",
+                "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "--merge-output-format", "mp4",
+                "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
+                url
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode != 0:
+                return {"status": "error", "message": result.stderr[-500:]}
+
+            files = list(Path(tmpdir).glob("*.mp4"))
+            if not files:
+                return {"status": "error", "message": "Không tìm thấy file sau download"}
+
+            video_path = files[0]
+            with open(video_path, "rb") as f:
+                data = f.read()
+
+            from fastapi.responses import Response
+            return Response(
+                content=data,
+                media_type="video/mp4",
+                headers={"Content-Disposition": f"attachment; filename={video_path.name}"}
+            )
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ============ CONVERT VIDEO ============
+@app.post("/convert-video")
+async def convert_video(
+    file: UploadFile = File(...),
+    format: str = Form("mp4"),
+    codec: str = Form("h264"),
+    ratio: str = Form("original"),
+    preset: str = Form("medium")
+):
+    suffix = Path(file.filename).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir="/tmp") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    out_path = tmp_path + f"_converted.{format}"
+    try:
+        # Build ffmpeg command
+        vf_filters = []
+        if ratio == "16:9":
+            vf_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+        elif ratio == "9:16":
+            vf_filters.append("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2")
+        elif ratio == "1:1":
+            vf_filters.append("scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2")
+
+        codec_map = {"h264": "libx264", "h265": "libx265", "vp9": "libvp9"}
+        vcodec = codec_map.get(codec, "libx264")
+
+        cmd = ["ffmpeg", "-i", tmp_path]
+        if vf_filters:
+            cmd += ["-vf", ",".join(vf_filters)]
+        cmd += ["-c:v", vcodec, "-preset", preset, "-c:a", "aac", "-y", out_path, "-loglevel", "error"]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=600)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode()[:500])
+
+        with open(out_path, "rb") as f:
+            data = f.read()
+
+        from fastapi.responses import Response
+        return Response(
+            content=data,
+            media_type="video/mp4",
+            headers={"Content-Disposition": f"attachment; filename=converted_{Path(file.filename).stem}.{format}"}
+        )
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        os.unlink(tmp_path)
+        if os.path.exists(out_path): os.unlink(out_path)
+
+
+# ============ MERGE VIDEOS ============
+@app.post("/merge-videos")
+async def merge_videos(files: list[UploadFile] = File(...)):
+    tmp_paths = []
+    try:
+        for f in files:
+            with tempfile.NamedTemporaryFile(suffix=Path(f.filename).suffix or ".mp4", delete=False, dir="/tmp") as tmp:
+                tmp.write(await f.read())
+                tmp_paths.append(tmp.name)
+
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, dir="/tmp", mode='w') as list_file:
+            for p in tmp_paths:
+                list_file.write(f"file '{p}'\n")
+            list_path = list_file.name
+
+        out_path = tmp_paths[0] + "_merged.mp4"
+        result = subprocess.run([
+            "ffmpeg", "-f", "concat", "-safe", "0",
+            "-i", list_path, "-c", "copy", out_path, "-y", "-loglevel", "error"
+        ], capture_output=True, timeout=600)
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode()[:500])
+
+        with open(out_path, "rb") as f:
+            data = f.read()
+
+        from fastapi.responses import Response
+        return Response(content=data, media_type="video/mp4",
+            headers={"Content-Disposition": "attachment; filename=merged.mp4"})
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        for p in tmp_paths:
+            if os.path.exists(p): os.unlink(p)
+        if os.path.exists(list_path): os.unlink(list_path)
+        if os.path.exists(out_path): os.unlink(out_path)
+
+
+# ============ ADD MUSIC ============
+@app.post("/add-music")
+async def add_music(
+    video: UploadFile = File(...),
+    music: UploadFile = File(...),
+    video_volume: float = Form(0.3),
+    music_volume: float = Form(0.7)
+):
+    with tempfile.NamedTemporaryFile(suffix=Path(video.filename).suffix or ".mp4", delete=False, dir="/tmp") as v:
+        v.write(await video.read())
+        video_path = v.name
+    with tempfile.NamedTemporaryFile(suffix=Path(music.filename).suffix or ".mp3", delete=False, dir="/tmp") as m:
+        m.write(await music.read())
+        music_path = m.name
+
+    out_path = video_path + "_with_music.mp4"
+    try:
+        result = subprocess.run([
+            "ffmpeg", "-i", video_path, "-i", music_path,
+            "-filter_complex",
+            f"[0:a]volume={video_volume}[a1];[1:a]volume={music_volume}[a2];[a1][a2]amix=inputs=2:duration=first[aout]",
+            "-map", "0:v", "-map", "[aout]",
+            "-c:v", "copy", "-shortest",
+            out_path, "-y", "-loglevel", "error"
+        ], capture_output=True, timeout=600)
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode()[:500])
+
+        with open(out_path, "rb") as f:
+            data = f.read()
+
+        from fastapi.responses import Response
+        return Response(content=data, media_type="video/mp4",
+            headers={"Content-Disposition": "attachment; filename=video_with_music.mp4"})
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        for p in [video_path, music_path, out_path]:
+            if os.path.exists(p): os.unlink(p)
+
+
+# ============ COMPRESS VIDEO ============
+@app.post("/compress-video")
+async def compress_video(
+    file: UploadFile = File(...),
+    preset: str = Form("youtube")
+):
+    presets = {
+        "youtube": {"crf": "23", "res": "1920:1080", "bitrate": "8000k"},
+        "facebook": {"crf": "28", "res": "1280:720", "bitrate": "4000k"},
+        "mobile":   {"crf": "32", "res": "854:480",  "bitrate": "1500k"},
+    }
+    p = presets.get(preset, presets["youtube"])
+
+    suffix = Path(file.filename).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir="/tmp") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    out_path = tmp_path + f"_{preset}.mp4"
+    try:
+        result = subprocess.run([
+            "ffmpeg", "-i", tmp_path,
+            "-c:v", "libx264", "-crf", p["crf"],
+            "-maxrate", p["bitrate"], "-bufsize", p["bitrate"],
+            "-vf", f"scale={p['res']}:force_original_aspect_ratio=decrease",
+            "-c:a", "aac", "-b:a", "192k",
+            out_path, "-y", "-loglevel", "error"
+        ], capture_output=True, timeout=600)
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode()[:500])
+
+        with open(out_path, "rb") as f:
+            data = f.read()
+
+        from fastapi.responses import Response
+        return Response(content=data, media_type="video/mp4",
+            headers={"Content-Disposition": f"attachment; filename={Path(file.filename).stem}_{preset}.mp4"})
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        for p in [tmp_path, out_path]:
+            if os.path.exists(p): os.unlink(p)
