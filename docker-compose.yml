@@ -1,6 +1,6 @@
 services:
   video-claude-backend:
-    build: .
+    image: video-claude-tool-video-claude-backend:latest
     container_name: video-claude-backend
     restart: unless-stopped
     privileged: true
@@ -8,15 +8,19 @@ services:
       - "8765:8000"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ALLOWED_ORIGINS=http://192.168.100.2:8766,http://localhost:8766
     volumes:
       - whisper-cache:/root/.cache/whisper
       - /tmp:/tmp
+      - /data:/data
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 600
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      interval: 300s
       timeout: 10s
       retries: 3
-      start_period: 90s
+      start_period: 30s
 
   video-claude-frontend:
     image: nginx:alpine
@@ -28,9 +32,6 @@ services:
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      video-claude-backend:
-        condition: service_healthy
 
 volumes:
   whisper-cache:

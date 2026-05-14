@@ -463,6 +463,33 @@
   .btn-split { padding:6px 14px; border-radius:6px; border:1px solid var(--accent); background:transparent; color:var(--accent); cursor:pointer; font-size:13px; margin-top:8px; width:100%; }
   .btn-split:hover { background:var(--accent); color:#fff; }
   .btn-split:disabled { opacity:0.4; cursor:not-allowed; }
+
+.menu-bar{display:flex;gap:4px;padding:8px 16px;background:#111118;border-bottom:1px solid #2a2a3a;overflow-x:auto;flex-shrink:0;}
+.menu-btn{padding:7px 14px;border-radius:6px;border:1px solid transparent;background:transparent;color:#9898b0;cursor:pointer;font-size:12px;font-family:"DM Sans",sans-serif;white-space:nowrap;transition:all 0.15s;}
+.menu-btn:hover{background:#22222f;color:#e8e8f0;}
+.menu-btn.active{background:#7c6aff;color:#fff;}
+.extra-panel{display:none;padding:16px;flex-direction:column;gap:14px;max-width:580px;}
+.extra-panel.active{display:flex;}
+.ep-title{font-size:18px;font-weight:600;margin-bottom:4px;}
+.ep-sub{font-size:13px;color:#9898b0;}
+.ep-card{background:#111118;border:1px solid #2a2a3a;border-radius:10px;padding:16px;}
+.ep-label{font-size:12px;color:#9898b0;margin-bottom:6px;display:block;}
+.ep-input{width:100%;background:#1a1a24;border:1px solid #2a2a3a;color:#e8e8f0;padding:9px 12px;border-radius:8px;font-size:13px;font-family:"DM Sans",sans-serif;margin-bottom:10px;}
+.ep-input:focus{outline:none;border-color:#7c6aff;}
+.ep-select{width:100%;background:#1a1a24;border:1px solid #2a2a3a;color:#e8e8f0;padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px;}
+.ep-btn{width:100%;padding:12px;background:#7c6aff;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:4px;}
+.ep-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.ep-progress{background:#1a1a24;border-radius:8px;padding:10px;margin-top:10px;font-size:13px;color:#9898b0;display:none;}
+.ep-progress.show{display:block;}
+.ep-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.ep-pill{padding:5px 12px;border-radius:20px;border:1px solid #2a2a3a;background:#1a1a24;color:#9898b0;cursor:pointer;font-size:12px;}
+.ep-pill:hover,.ep-pill.on{border-color:#7c6aff;color:#7c6aff;background:rgba(124,106,255,0.1);}
+.merge-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.merge-item{display:flex;justify-content:space-between;align-items:center;background:#1a1a24;padding:8px 12px;border-radius:6px;font-size:12px;}
+.merge-item button{background:none;border:none;color:#ff4d6d;cursor:pointer;}
+.add-btn{padding:8px;border:1px dashed #2a2a3a;background:transparent;color:#5a5a72;border-radius:6px;cursor:pointer;font-size:12px;width:100%;}
+.add-btn:hover{border-color:#7c6aff;color:#7c6aff;}
+
 </style>
 </head>
 <body>
@@ -476,6 +503,15 @@
     <div class="dot" id="status-dot"></div>
     <span id="status-text">Đang kiểm tra...</span>
   </div>
+
+<div class="menu-bar" id="menu-bar">
+  <button class="menu-btn active" data-panel="analyze" onclick="switchPanel('analyze',this)">🎬 Phân tích</button>
+  <button class="menu-btn" data-panel="download" onclick="switchPanel('download',this)">⬇️ Download</button>
+  <button class="menu-btn" data-panel="convert" onclick="switchPanel('convert',this)">🔄 Converter</button>
+  <button class="menu-btn" data-panel="merge" onclick="switchPanel('merge',this)">➕ Ghép Video</button>
+  <button class="menu-btn" data-panel="music" onclick="switchPanel('music',this)">🎵 Ghép Nhạc</button>
+  <button class="menu-btn" data-panel="compress" onclick="switchPanel('compress',this)">📦 Nén Video</button>
+</div>
 </header>
 
 <div class="app">
@@ -629,7 +665,7 @@
 
 <script>
 // Auto-detect: nếu chạy qua Docker/nginx dùng /api, nếu local dùng localhost:8000
-const BACKEND = 'http://192.168.100.2:8765';
+const BACKEND = '';
 // State
 let videoFile = null;
 let lastAnalysis = '';
@@ -1042,7 +1078,7 @@ function showActionButtons(el, text) {
       fd.append('file', videoFile);
       fd.append('srt_content', textToSRT(text));
       fd.append('language', 'auto');
-      const resp = await fetch('http://192.168.100.2:8765/sync-srt', {method:'POST', body:fd});
+      const resp = await fetch('/api/sync-srt', {method:'POST', body:fd});
       const data = await resp.json();
       if (data.status === 'ok') {
         // Download SRT đã sync
@@ -1091,7 +1127,7 @@ async function showSplitSuggestion() {
     const fd = new FormData();
     fd.append('file', videoFile);
     fd.append('segment_minutes', '10');
-    const resp = await fetch('http://192.168.100.2:8765/split-video', {method:'POST', body:fd});
+    const resp = await fetch('/api/split-video', {method:'POST', body:fd});
     const data = await resp.json();
 
     if (data.status === 'ok') {
@@ -1133,7 +1169,7 @@ async function downloadSegments() {
       fd.append('start', seg.start);
       fd.append('end', seg.end);
       fd.append('index', seg.index);
-      const resp = await fetch('http://192.168.100.2:8765/cut-segment', {method:'POST', body:fd});
+      const resp = await fetch('/api/cut-segment', {method:'POST', body:fd});
       const blob = await resp.blob();
       const ext = videoFile.name.split('.').pop();
       const a = document.createElement('a');
@@ -1148,6 +1184,293 @@ async function downloadSegments() {
   btn.textContent = '✅ Xong!';
   btn.disabled = false;
 }
+</script>
+
+
+
+<!-- DOWNLOAD -->
+<div class="extra-panel" id="panel-download">
+<button onclick="switchPanel('analyze', document.querySelector('.menu-btn[data-panel=\'analyze\']'))" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid #2a2a3a;background:transparent;color:#9898b0;cursor:pointer;font-size:12px;margin-bottom:12px;">← Quay lại</button>
+
+  <div><div class="ep-title">⬇️ Download Video</div><div class="ep-sub">Tải video từ YouTube, TikTok và các nền tảng khác</div></div>
+  <div class="ep-card">
+    <label class="ep-label">URL Video</label>
+    <input class="ep-input" id="dl-url" placeholder="https://youtube.com/watch?v=... hoặc TikTok URL...">
+    <label class="ep-label">Nền tảng</label>
+    <div class="ep-pills">
+      <span class="ep-pill on">🎬 YouTube</span>
+      <span class="ep-pill">🎵 TikTok</span>
+      <span class="ep-pill">📸 Instagram</span>
+      <span class="ep-pill">📘 Facebook</span>
+    </div>
+    <button class="ep-btn" id="btn-dl" onclick="doDownload()">⬇️ Download</button>
+    <div class="ep-progress" id="dl-prog"></div>
+  </div>
+</div>
+
+<!-- CONVERT -->
+<div class="extra-panel" id="panel-convert">
+<button onclick="switchPanel('analyze', document.querySelector('.menu-btn[data-panel=\'analyze\']'))" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid #2a2a3a;background:transparent;color:#9898b0;cursor:pointer;font-size:12px;margin-bottom:12px;">← Quay lại</button>
+
+  <div><div class="ep-title">🔄 Converter Video</div><div class="ep-sub">Chuyển đổi codec, tỷ lệ khung hình</div></div>
+  <div class="ep-card">
+    <label class="ep-label">Chọn video</label>
+    <input type="file" class="ep-input" id="conv-file" accept="video/*" style="padding:6px;">
+    <label class="ep-label">Codec</label>
+    <div class="ep-pills" id="codec-pills">
+      <span class="ep-pill on" onclick="setPill(this,'codec-pills')">H.264</span>
+      <span class="ep-pill" onclick="setPill(this,'codec-pills')">H.265</span>
+      <span class="ep-pill" onclick="setPill(this,'codec-pills')">VP9</span>
+    </div>
+    <label class="ep-label">Tỷ lệ</label>
+    <div class="ep-pills" id="ratio-pills">
+      <span class="ep-pill on" onclick="setPill(this,'ratio-pills')">Giữ nguyên</span>
+      <span class="ep-pill" onclick="setPill(this,'ratio-pills')">16:9</span>
+      <span class="ep-pill" onclick="setPill(this,'ratio-pills')">9:16</span>
+      <span class="ep-pill" onclick="setPill(this,'ratio-pills')">1:1</span>
+    </div>
+    <label class="ep-label">Tốc độ encode</label>
+    <select class="ep-select" id="conv-speed">
+      <option value="fast">Nhanh</option>
+      <option value="medium" selected>Cân bằng</option>
+      <option value="slow">Chất lượng cao</option>
+    </select>
+    <button class="ep-btn" id="btn-conv" onclick="doConvert()">🔄 Chuyển đổi</button>
+    <div class="ep-progress" id="conv-prog"></div>
+  </div>
+</div>
+
+<!-- MERGE -->
+<div class="extra-panel" id="panel-merge">
+<button onclick="switchPanel('analyze', document.querySelector('.menu-btn[data-panel=\'analyze\']'))" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid #2a2a3a;background:transparent;color:#9898b0;cursor:pointer;font-size:12px;margin-bottom:12px;">← Quay lại</button>
+
+  <div><div class="ep-title">➕ Ghép Video</div><div class="ep-sub">Ghép nhiều đoạn video thành một</div></div>
+  <div class="ep-card">
+    <label class="ep-label">Danh sách video (theo thứ tự)</label>
+    <div class="merge-list" id="merge-list"></div>
+    <button class="add-btn" onclick="document.getElementById('merge-file-inp').click()">+ Thêm video</button>
+    <input type="file" id="merge-file-inp" accept="video/*" style="display:none" onchange="addMergeFile(this)">
+    <button class="ep-btn" id="btn-merge" onclick="doMerge()" style="margin-top:12px;">➕ Ghép Video</button>
+    <div class="ep-progress" id="merge-prog"></div>
+  </div>
+</div>
+
+<!-- MUSIC -->
+<div class="extra-panel" id="panel-music">
+<button onclick="switchPanel('analyze', document.querySelector('.menu-btn[data-panel=\'analyze\']'))" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid #2a2a3a;background:transparent;color:#9898b0;cursor:pointer;font-size:12px;margin-bottom:12px;">← Quay lại</button>
+
+  <div><div class="ep-title">🎵 Ghép Nhạc</div><div class="ep-sub">Thêm nhạc nền, điều chỉnh âm lượng</div></div>
+  <div class="ep-card">
+    <label class="ep-label">Video gốc</label>
+    <input type="file" class="ep-input" id="music-video" accept="video/*" style="padding:6px;">
+    <label class="ep-label">File nhạc (MP3/WAV/AAC)</label>
+    <input type="file" class="ep-input" id="music-file" accept="audio/*" style="padding:6px;">
+    <label class="ep-label">Âm lượng video gốc: <span id="vv">30%</span></label>
+    <input type="range" min="0" max="100" value="30" style="width:100%;accent-color:#7c6aff;margin-bottom:10px;" oninput="document.getElementById('vv').textContent=this.value+'%'" id="vid-vol">
+    <label class="ep-label">Âm lượng nhạc: <span id="mv">70%</span></label>
+    <input type="range" min="0" max="100" value="70" style="width:100%;accent-color:#7c6aff;margin-bottom:10px;" oninput="document.getElementById('mv').textContent=this.value+'%'" id="music-vol">
+    <button class="ep-btn" id="btn-music" onclick="doMusic()">🎵 Ghép Nhạc</button>
+    <div class="ep-progress" id="music-prog"></div>
+  </div>
+</div>
+
+<!-- COMPRESS -->
+<div class="extra-panel" id="panel-compress">
+<button onclick="switchPanel('analyze', document.querySelector('.menu-btn[data-panel=\'analyze\']'))" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid #2a2a3a;background:transparent;color:#9898b0;cursor:pointer;font-size:12px;margin-bottom:12px;">← Quay lại</button>
+
+  <div><div class="ep-title">📦 Nén Video</div><div class="ep-sub">Tối ưu video cho YouTube, Facebook, Mobile</div></div>
+  <div class="ep-card">
+    <label class="ep-label">Chọn video</label>
+    <input type="file" class="ep-input" id="compress-file" accept="video/*" style="padding:6px;">
+    <label class="ep-label">Preset</label>
+    <div class="ep-pills" id="preset-pills">
+      <span class="ep-pill on" onclick="setPill(this,'preset-pills');updatePresetInfo(this.textContent)">📺 YouTube 1080p</span>
+      <span class="ep-pill" onclick="setPill(this,'preset-pills');updatePresetInfo(this.textContent)">📘 Facebook 720p</span>
+      <span class="ep-pill" onclick="setPill(this,'preset-pills');updatePresetInfo(this.textContent)">📱 Mobile 480p</span>
+    </div>
+    <div id="preset-info" style="background:#1a1a24;border-radius:8px;padding:10px;font-size:12px;color:#9898b0;margin-bottom:10px;">
+      <strong style="color:#e8e8f0">YouTube 1080p:</strong> H.264, CRF 23, max 8Mbps, 1920×1080
+    </div>
+    <button class="ep-btn" id="btn-compress" onclick="doCompress()">📦 Nén Video</button>
+    <div class="ep-progress" id="compress-prog"></div>
+  </div>
+</div>
+
+<script>
+
+const API = '';
+let _mergeFiles = [];
+
+function switchPanel(name, btn) {
+  document.querySelectorAll('.extra-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Tìm main content (tất cả children trực tiếp của body trừ header, menu, extra-panel)
+  const mainContent = document.querySelectorAll('body > *:not(.extra-panel):not(#menu-bar):not(script):not(style)');
+  
+  if (name === 'analyze') {
+    mainContent.forEach(el => {
+      if (!el.classList.contains('menu-bar')) el.style.display = '';
+    });
+  } else {
+    mainContent.forEach(el => {
+      const tag = el.tagName.toLowerCase();
+      if (tag !== 'script' && tag !== 'style' && !el.classList.contains('menu-bar')) {
+        el.style.display = 'none';
+      }
+    });
+    const panel = document.getElementById('panel-' + name);
+    if (panel) panel.classList.add('active');
+  }
+}
+
+function setPill(el, groupId) {
+  document.getElementById(groupId).querySelectorAll('.ep-pill').forEach(p => p.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function getActivePill(groupId) {
+  const el = document.querySelector('#' + groupId + ' .ep-pill.on');
+  return el ? el.textContent.trim() : '';
+}
+
+const presetInfo = {
+  'youtube': 'H.264, CRF 23, max 8Mbps, 1920×1080',
+  'facebook': 'H.264, CRF 28, max 4Mbps, 1280×720',
+  'mobile': 'H.264, CRF 32, max 1.5Mbps, 854×480'
+};
+function updatePresetInfo(pill) {
+  const k = pill.includes('YouTube') ? 'youtube' : pill.includes('Facebook') ? 'facebook' : 'mobile';
+  const label = pill.replace(/[📺📘📱]\s*/,'');
+  document.getElementById('preset-info').innerHTML = `<strong style="color:#e8e8f0">${label}:</strong> ${presetInfo[k]}`;
+}
+
+async function doDownload() {
+  const url = document.getElementById('dl-url').value.trim();
+  if (!url) return alert('Nhập URL video!');
+  const btn = document.getElementById('btn-dl');
+  const prog = document.getElementById('dl-prog');
+  btn.disabled = true; prog.className = 'ep-progress show';
+  prog.textContent = '⏳ Đang khởi động tải...';
+  try {
+    const fd = new FormData(); fd.append('url', url); fd.append('quality','best');
+    const resp = await fetch('/api/download-video', {method:'POST', body:fd});
+    const data = await resp.json();
+    if (!data.job_id) throw new Error(data.message || 'Lỗi khởi động');
+    const jobId = data.job_id;
+    // Poll status mỗi 10s
+    for (let i = 0; i < 60; i++) {
+      prog.textContent = `⏳ Đang tải... ${(i+1)*10}s`;
+      await new Promise(r => setTimeout(r, 10000));
+      const sr = await fetch('/api/download-status/' + jobId);
+      const s = await sr.json();
+      if (s.status === 'ok') {
+        prog.innerHTML = `✅ Tải xong! <strong>${s.filename}</strong> (${s.size_mb}MB)<br>
+          <a href="/api${s.download_url}" download="${s.filename}"
+             style="display:inline-block;margin-top:8px;padding:8px 16px;background:#7c6aff;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;">
+            ⬇️ Lưu file về máy
+          </a>`;
+        btn.disabled = false; return;
+      }
+      if (s.status === 'error') throw new Error(s.message);
+    }
+    throw new Error('Timeout 10 phút');
+  } catch(e) { prog.textContent = '❌ Lỗi: ' + e.message; }
+  btn.disabled = false;
+}
+
+async function doConvert() {
+  const file = document.getElementById('conv-file').files[0];
+  if (!file) return alert('Chọn video!');
+  const codecTxt = getActivePill('codec-pills');
+  const codec = codecTxt.includes('265') ? 'h265' : codecTxt.includes('VP9') ? 'vp9' : 'h264';
+  const ratioTxt = getActivePill('ratio-pills');
+  const ratioMap = {'16:9':'16:9','9:16':'9:16','1:1':'1:1'};
+  const ratio = ratioMap[ratioTxt] || 'original';
+  const btn = document.getElementById('btn-conv');
+  const prog = document.getElementById('conv-prog');
+  btn.disabled = true; prog.className = 'ep-progress show'; prog.textContent = '⏳ Đang chuyển đổi...';
+  try {
+    const fd = new FormData();
+    fd.append('file',file); fd.append('format','mp4'); fd.append('codec',codec);
+    fd.append('ratio',ratio); fd.append('preset',document.getElementById('conv-speed').value);
+    const resp = await fetch(API+'/convert-video',{method:'POST',body:fd});
+    if (!resp.ok) { const d=await resp.json(); throw new Error(d.message); }
+    const blob = await resp.blob();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=file.name.replace(/[.][^.]+$/,'')+'_converted.mp4'; a.click();
+    prog.textContent='✅ Chuyển đổi thành công!';
+  } catch(e) { prog.textContent='❌ Lỗi: '+e.message; }
+  btn.disabled=false;
+}
+
+function addMergeFile(inp) {
+  const f = inp.files[0]; if (!f) return;
+  _mergeFiles.push(f); renderMergeList(); inp.value='';
+}
+function renderMergeList() {
+  const list = document.getElementById('merge-list'); list.innerHTML='';
+  _mergeFiles.forEach((f,i) => {
+    const item=document.createElement('div'); item.className='merge-item';
+    item.innerHTML=`<span>${i+1}. ${f.name} (${(f.size/1024/1024).toFixed(1)}MB)</span><button onclick="_mergeFiles.splice(${i},1);renderMergeList()">✕</button>`;
+    list.appendChild(item);
+  });
+}
+async function doMerge() {
+  if (_mergeFiles.length < 2) return alert('Cần ít nhất 2 video!');
+  const btn=document.getElementById('btn-merge'); const prog=document.getElementById('merge-prog');
+  btn.disabled=true; prog.className='ep-progress show'; prog.textContent='⏳ Đang ghép...';
+  try {
+    const fd=new FormData(); _mergeFiles.forEach(f=>fd.append('files',f));
+    const resp=await fetch(API+'/merge-videos',{method:'POST',body:fd});
+    if (!resp.ok) { const d=await resp.json(); throw new Error(d.message); }
+    const blob=await resp.blob();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='merged.mp4'; a.click();
+    prog.textContent='✅ Ghép thành công!';
+  } catch(e) { prog.textContent='❌ Lỗi: '+e.message; }
+  btn.disabled=false;
+}
+
+async function doMusic() {
+  const video=document.getElementById('music-video').files[0];
+  const music=document.getElementById('music-file').files[0];
+  if (!video||!music) return alert('Chọn video và file nhạc!');
+  const btn=document.getElementById('btn-music'); const prog=document.getElementById('music-prog');
+  btn.disabled=true; prog.className='ep-progress show'; prog.textContent='⏳ Đang ghép nhạc...';
+  try {
+    const fd=new FormData();
+    fd.append('video',video); fd.append('music',music);
+    fd.append('video_volume', document.getElementById('vid-vol').value/100);
+    fd.append('music_volume', document.getElementById('music-vol').value/100);
+    const resp=await fetch(API+'/add-music',{method:'POST',body:fd});
+    if (!resp.ok) { const d=await resp.json(); throw new Error(d.message); }
+    const blob=await resp.blob();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='video_music.mp4'; a.click();
+    prog.textContent='✅ Ghép nhạc thành công!';
+  } catch(e) { prog.textContent='❌ Lỗi: '+e.message; }
+  btn.disabled=false;
+}
+
+async function doCompress() {
+  const file=document.getElementById('compress-file').files[0];
+  if (!file) return alert('Chọn video!');
+  const pill=getActivePill('preset-pills');
+  const preset=pill.includes('YouTube')?'youtube':pill.includes('Facebook')?'facebook':'mobile';
+  const btn=document.getElementById('btn-compress'); const prog=document.getElementById('compress-prog');
+  btn.disabled=true; prog.className='ep-progress show'; prog.textContent='⏳ Đang nén...';
+  try {
+    const fd=new FormData(); fd.append('file',file); fd.append('preset',preset);
+    const resp=await fetch(API+'/compress-video',{method:'POST',body:fd});
+    if (!resp.ok) { const d=await resp.json(); throw new Error(d.message); }
+    const blob=await resp.blob();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=file.name.replace(/[.][^.]+$/,'')+'_'+preset+'.mp4'; a.click();
+    prog.textContent='✅ Nén thành công!';
+  } catch(e) { prog.textContent='❌ Lỗi: '+e.message; }
+  btn.disabled=false;
+}
+
 </script>
 </body>
 </html>
