@@ -2,7 +2,14 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#7c6aff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VideoClaude">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Video × Claude</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -441,6 +448,84 @@
   }
   .btn-send:hover { border-color: var(--accent); color: var(--accent2); }
   .btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
+
+
+  /* ── Mobile Responsive ────────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    header { padding: 12px 16px; }
+    .logo { font-size: 13px; }
+    .logo-icon { width: 28px; height: 28px; font-size: 14px; }
+
+    .menu-bar {
+      padding: 6px 8px;
+      gap: 4px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .menu-bar::-webkit-scrollbar { display: none; }
+    .menu-btn { padding: 6px 10px; font-size: 11px; flex-shrink: 0; }
+
+    .app { grid-template-columns: 1fr; height: auto; }
+
+    .sidebar {
+      height: auto;
+      position: relative;
+      top: 0;
+      max-height: 45vh;
+      overflow-y: auto;
+    }
+
+    .sidebar-section { padding: 14px; }
+
+    .main {
+      height: calc(55vh - 60px);
+      min-height: 300px;
+    }
+
+    .question-bar { padding: 10px 12px; gap: 8px; }
+    .question-wrap textarea { font-size: 13px; }
+    .btn-analyze { padding: 10px 14px; font-size: 13px; }
+
+    .chat-area { padding: 12px; }
+    .msg-content { font-size: 13px; }
+
+    .followup-bar { padding: 8px 12px; }
+    .followup-input { font-size: 13px; }
+
+    .extra-panel { padding: 12px; }
+    .ep-title { font-size: 16px; }
+    .ep-card { padding: 12px; }
+    .ep-input, .ep-select { font-size: 13px; padding: 8px 10px; }
+    .ep-btn { padding: 10px; font-size: 13px; }
+    .ep-pills { gap: 4px; }
+    .ep-pill { padding: 4px 10px; font-size: 11px; }
+
+    .pipeline { display: none; }
+    .workflow { gap: 4px; }
+    .wf-step { padding: 6px 8px; font-size: 11px; }
+
+    .drop-zone { padding: 20px 12px; }
+    .drop-icon { font-size: 24px; }
+
+    /* Safe area cho iPhone notch */
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    header { padding-top: max(12px, env(safe-area-inset-top)); }
+  }
+
+  @media (max-width: 480px) {
+    .logo span { display: none; }
+    .header-status { display: none; }
+    .menu-btn { font-size: 10px; padding: 5px 8px; }
+  }
+
+  /* PWA standalone mode */
+  @media (display-mode: standalone) {
+    header {
+      padding-top: max(18px, env(safe-area-inset-top));
+    }
+  }
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
@@ -1471,6 +1556,16 @@ async function doCompress() {
   btn.disabled=false;
 }
 
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(r => console.log('SW registered'))
+      .catch(e => console.log('SW failed:', e));
+  });
+}
 </script>
 </body>
 </html>

@@ -1,0 +1,37 @@
+{
+  "name": "Video × Claude",
+  "short_name": "VideoClaude",
+  "description": "Phân tích và xử lý video bằng Claude AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#7c6aff",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Phân tích Video",
+      "url": "/?tab=analyze",
+      "description": "Upload và phân tích video"
+    },
+    {
+      "name": "Download Video",
+      "url": "/?tab=download",
+      "description": "Download từ YouTube/TikTok"
+    }
+  ]
+}
